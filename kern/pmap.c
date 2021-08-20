@@ -163,6 +163,8 @@ mem_init(void)
 	//////////////////////////////////////////////////////////////////////
 	// Make 'envs' point to an array of size 'NENV' of 'struct Env'.
 	// LAB 3: Your code here.
+	envs = (struct Env *) boot_alloc(sizeof(struct Env) * NENV);
+	memset(envs, 0, sizeof(struct Env) * NENV);
 
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
@@ -200,6 +202,12 @@ mem_init(void)
 	//    - the new image at UENVS  -- kernel R, user R
 	//    - envs itself -- kernel RW, user NONE
 	// LAB 3: Your code here.
+	n = ROUNDUP(sizeof(struct Env) * NENV, PGSIZE) / PGSIZE;
+	for(size_t i = 0; i < n; ++i){
+		page_insert(kern_pgdir, pa2page(PADDR(envs) + PGSIZE * i), (void *) (UENVS + PGSIZE * i), PTE_U | PTE_P);
+		page_insert(kern_pgdir, pa2page(PADDR(envs) + PGSIZE * i), (void *) ((uintptr_t) envs + PGSIZE * i), PTE_W | PTE_P);
+	}
+
 
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
@@ -587,6 +595,18 @@ int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here.
+	uint32_t low = (uint32_t) va, low1 = low;
+	uint32_t top = low + len;
+	if (top >= ULIM) {
+		user_mem_check_addr = low > ULIM ? low : ULIM;
+		return -E_FAULT;
+	} 
+	pte_t * p;
+	for(; ROUNDDOWN(low, PGSIZE) <= ROUNDDOWN(top, PGSIZE); low += PGSIZE){
+		if (page_lookup(env->env_pgdir, (void *) ROUNDDOWN(low, PGSIZE), &p) && ((*p & (uint32_t) perm) == (uint32_t) perm)) continue;
+		user_mem_check_addr = (low1 > ROUNDDOWN(low, PGSIZE)) ? low1: ROUNDDOWN(low, PGSIZE);
+		return -E_FAULT;
+	}
 
 	return 0;
 }

@@ -33,6 +33,8 @@ i386_init(void)
 
 	// Lab 3 user environment initialization functions
 	env_init();
+	cprintf("6828 decimal is %o octal!\n", 6828);
+
 	trap_init();
 
 #if defined(TEST)
