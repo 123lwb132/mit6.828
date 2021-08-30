@@ -73,6 +73,26 @@ trap_init(void)
 
 	// LAB 3: Your code here.
 
+	SETGATE(idt[T_DIVIDE], 0, GD_KT, DIVIDE, 0);
+	SETGATE(idt[T_DEBUG], 0, GD_KT, DEBUG, 0);
+	SETGATE(idt[T_NMI], 0, GD_KT, NMI, 0);
+	SETGATE(idt[T_BRKPT], 0, GD_KT, BRKPT, 3);
+	SETGATE(idt[T_OFLOW], 0, GD_KT, OFLOW, 0);
+	SETGATE(idt[T_BOUND], 0, GD_KT, BOUND, 0);
+	SETGATE(idt[T_ILLOP], 0, GD_KT, ILLOP, 0);
+	SETGATE(idt[T_DEVICE], 0, GD_KT, DEVICE, 0);
+	SETGATE(idt[T_DBLFLT], 0, GD_KT, DBLFLT, 0);
+	SETGATE(idt[T_TSS], 0, GD_KT, TSS, 0);
+	SETGATE(idt[T_SEGNP], 0, GD_KT, SEGNP, 0);
+	SETGATE(idt[T_STACK], 0, GD_KT, STACK, 0);
+	SETGATE(idt[T_GPFLT], 0, GD_KT, GPFLT, 0);
+	SETGATE(idt[T_PGFLT], 0, GD_KT, PGFLT, 0);
+	SETGATE(idt[T_FPERR], 0, GD_KT, FPERR, 0);
+	SETGATE(idt[T_ALIGN], 0, GD_KT, ALIGN, 0);
+	SETGATE(idt[T_MCHK], 0, GD_KT, MCHK, 0);
+	SETGATE(idt[T_SIMDERR], 0, GD_KT, SIMDERR, 0);
+
+	SETGATE(idt[T_SYSCALL], 0, GD_KT, SYSCALL, 3);
 	// Per-CPU setup 
 	trap_init_percpu();
 }
@@ -176,6 +196,27 @@ trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
 	// LAB 3: Your code here.
+	switch (tf->tf_trapno){
+		case T_PGFLT:
+			page_fault_handler(tf);
+			return;
+		case T_BRKPT:
+			backtrace(tf);
+			return;
+		case T_SYSCALL:{
+			uint32_t syscall_no = tf->tf_regs.reg_eax;
+			uint32_t a1 = tf->tf_regs.reg_edx;
+			uint32_t a2 = tf->tf_regs.reg_ecx;
+			uint32_t a3 = tf->tf_regs.reg_ebx; 
+			uint32_t a4 = tf->tf_regs.reg_edi; 
+			uint32_t a5 = tf->tf_regs.reg_esi;
+			tf->tf_regs.reg_eax = syscall(syscall_no, a1, a2, a3, a4, a5);
+			return;
+		}
+
+		default:
+			break;
+	}
 
 	// Handle spurious interrupts
 	// The hardware sometimes raises these because of noise on the
@@ -222,6 +263,7 @@ trap(struct Trapframe *tf)
 	assert(!(read_eflags() & FL_IF));
 
 	if ((tf->tf_cs & 3) == 3) {
+		cprintf("Incomingframe at %p\n", tf);
 		// Trapped from user mode.
 		// Acquire the big kernel lock before doing any
 		// serious kernel work.
@@ -271,6 +313,17 @@ page_fault_handler(struct Trapframe *tf)
 	// Handle kernel-mode page faults.
 
 	// LAB 3: Your code here.
+	if ((tf->tf_cs & 3) == 0){
+		panic("kernel fail");
+		return;
+		// fault_va = ROUNDDOWN(fault_va, PGSIZE);
+		// struct PageInfo * pp = page_alloc(~ALLOC_ZERO);
+		// if (!pp) panic("out of mem");
+		// if(page_insert(kern_pgdir, pp, (void *) fault_va, PTE_W | PTE_W) < 0) panic("out of mem");
+
+		// curenv->env_pgdir[PDX(fault_va)] = kern_pgdir[PDX(fault_va)];
+		// return;
+	}
 
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.
@@ -311,5 +364,12 @@ page_fault_handler(struct Trapframe *tf)
 		curenv->env_id, fault_va, tf->tf_eip);
 	print_trapframe(tf);
 	env_destroy(curenv);
+}
+
+void 
+backtrace(struct Trapframe * tf)
+{
+	monitor(tf);
+	return;
 }
 
