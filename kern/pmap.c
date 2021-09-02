@@ -234,12 +234,7 @@ mem_init(void)
 	// we just set up the mapping anyway.
 	// Permissions: kernel RW, user NONE
 	// Your code goes here:
-	// for(size_t size = 0; size < 0xffffffff - KERNBASE; size += PGSIZE){
 
-	// }
-	// for(size_t size = 0; size < npages * PGSIZE; size += PGSIZE){
-	// 	page_insert(kern_pgdir, pa2page(size), (void *) (KERNBASE + size), PTE_W | PTE_P);
-	// }
 	boot_map_region(kern_pgdir, KERNBASE, 0xffffffff - KERNBASE + 1, 0, PTE_W | PTE_P);
 
 
@@ -293,6 +288,10 @@ mem_init_mp(void)
 	//     Permissions: kernel RW, user NONE
 	//
 	// LAB 4: Your code here:
+	for(size_t i = 0; i < NCPU; ++i){
+		physaddr_t kstacktop_i = KSTACKTOP - i * (KSTKSIZE + KSTKGAP);
+		boot_map_region(kern_pgdir, kstacktop_i - KSTKSIZE, KSTKSIZE, PADDR(&percpu_kstacks[i]), PTE_W);
+	}
 
 }
 
@@ -333,7 +332,8 @@ page_init(void)
 	// NB: DO NOT actually touch the physical memory corresponding to
 	// free pages!
 	size_t i;
-	for (i = 1; i < PGNUM(IOPHYSMEM); i++) {
+	for (i = 1; i < npages_basemem; i++) {
+		if (i == PGNUM(MPENTRY_PADDR)) continue;
 		pages[i].pp_ref = 0;
 		pages[i].pp_link = page_free_list;
 		page_free_list = &pages[i];
@@ -637,7 +637,12 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Hint: The staff solution uses boot_map_region.
 	//
 	// Your code here:
-	panic("mmio_map_region not implemented");
+	if (base + ROUNDUP(size, PGSIZE) > MMIOLIM) panic("out of mem");
+	boot_map_region(kern_pgdir, base, ROUNDUP(size, PGSIZE), pa, PTE_PCD|PTE_PWT|PTE_W);
+	uintptr_t old = base;
+	base += ROUNDUP(size, PGSIZE);
+	return (void *) old;
+	// panic("mmio_map_region not implemented");
 }
 
 static uintptr_t user_mem_check_addr;
@@ -665,7 +670,7 @@ user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here.
 	uint32_t low = (uint32_t) va, low1 = low;
-	uint32_t top = low + len;
+	uint32_t top = low + len -1;
 	if (top >= ULIM) {
 		user_mem_check_addr = low > ULIM ? low : ULIM;
 		return -E_FAULT;
@@ -872,8 +877,6 @@ check_kern_pgdir(void)
 	// check phys mem
 	for (i = 0; i < npages * PGSIZE; i += PGSIZE)
 		assert(check_va2pa(pgdir, KERNBASE + i) == i);
-	cprintf("1\n");
-
 	// check kernel stack
 	// (updated in lab 4 to check per-CPU kernel stacks)
 	for (n = 0; n < NCPU; n++) {

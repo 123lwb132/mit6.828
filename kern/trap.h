@@ -40,4 +40,12 @@ void ALIGN();
 void MCHK();
 void SIMDERR();
 void SYSCALL();
+
+
+void IRQTIMER();
+void IRQKBD();
+void IRQSERIAL();
+void IRQSPURIOUS();
+void IRQIDE();
+void IRQERROR();
 #endif /* JOS_KERN_TRAP_H */
