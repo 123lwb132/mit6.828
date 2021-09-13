@@ -104,7 +104,10 @@ fork(void)
 	for(size_t i = 0; i < PGNUM(UTOP) - 1; ++i){
 		if (!((uvpd[(i/1024)] & PTE_P) && (p[i] & PTE_P))) continue;
 
-		if (p[i] & (PTE_COW | PTE_W)){
+		if (p[i] & PTE_SHARE) {
+			sys_page_map(0, (void *) (i * PGSIZE), env, (void *) (i * PGSIZE), p[i] & (PTE_SYSCALL | PTE_SHARE));
+		}
+		else if (p[i] & (PTE_COW | PTE_W)){
 			r = duppage(env, i);
 			if (r < 0) panic("gg\n");
 		}
